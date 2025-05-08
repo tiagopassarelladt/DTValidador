@@ -1,0 +1,207 @@
+﻿unit TesteUnit;
+
+interface
+
+uses
+  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ComCtrls, Vcl.ExtCtrls,
+  DTValidador;
+
+type
+  TFormTeste = class(TForm)
+    PageControl1: TPageControl;
+    TabCPF: TTabSheet;
+    TabCNPJ: TTabSheet;
+    TabCNPJAlfa: TTabSheet;
+    TabAuto: TTabSheet;
+    Panel1: TPanel;
+    Label1: TLabel;
+    EditCPF: TEdit;
+    ButtonValidarCPF: TButton;
+    MemoCPF: TMemo;
+    Panel2: TPanel;
+    Label2: TLabel;
+    EditCNPJ: TEdit;
+    ButtonValidarCNPJ: TButton;
+    MemoCNPJ: TMemo;
+    Panel3: TPanel;
+    Label3: TLabel;
+    EditCNPJAlfa: TEdit;
+    ButtonValidarCNPJAlfa: TButton;
+    MemoCNPJAlfa: TMemo;
+    Panel4: TPanel;
+    Label4: TLabel;
+    EditAuto: TEdit;
+    ButtonValidarAuto: TButton;
+    MemoAuto: TMemo;
+    ButtonTestarTodos: TButton;
+    DTValidador1: TDTValidador;
+    procedure FormCreate(Sender: TObject);
+    procedure ButtonValidarCPFClick(Sender: TObject);
+    procedure ButtonValidarCNPJClick(Sender: TObject);
+    procedure ButtonValidarCNPJAlfaClick(Sender: TObject);
+    procedure ButtonValidarAutoClick(Sender: TObject);
+    procedure ButtonTestarTodosClick(Sender: TObject);
+  private
+    { Private declarations }
+    procedure AdicionarTesteCPF(const ACPF: string);
+    procedure AdicionarTesteCNPJ(const ACNPJ: string);
+    procedure AdicionarTesteCNPJAlfa(const ACNPJ: string);
+    procedure AdicionarTesteAuto(const ACNPJ: string);
+  public
+    { Public declarations }
+  end;
+
+var
+  FormTeste: TFormTeste;
+
+implementation
+
+{$R *.dfm}
+
+procedure TFormTeste.FormCreate(Sender: TObject);
+begin
+  // Configura os memos
+  MemoCPF.Clear;
+  MemoCNPJ.Clear;
+  MemoCNPJAlfa.Clear;
+  MemoAuto.Clear;
+
+  // Exemplos iniciais
+  EditCPF.Text := '123.456.789-09';
+  EditCNPJ.Text := '12.345.678/0001-95';
+  EditCNPJAlfa.Text := '12ABC34501DE35';
+  EditAuto.Text := '12.345.678/0001-95';
+
+  // Configura as tabs
+  PageControl1.ActivePageIndex := 0;
+end;
+
+procedure TFormTeste.AdicionarTesteCPF(const ACPF: string);
+begin
+  DTValidador1.DocumentType := dtCPF;
+  DTValidador1.Document := ACPF;
+
+  if DTValidador1.Validate then
+    MemoCPF.Lines.Add(Format('CPF %s é válido.', [ACPF]))
+  else
+    MemoCPF.Lines.Add(Format('CPF %s é inválido: %s', [ACPF, DTValidador1.LastError]));
+end;
+
+procedure TFormTeste.AdicionarTesteCNPJ(const ACNPJ: string);
+begin
+  DTValidador1.DocumentType := dtCNPJ;
+  DTValidador1.Document := ACNPJ;
+
+  if DTValidador1.Validate then
+    MemoCNPJ.Lines.Add(Format('CNPJ %s é válido.', [ACNPJ]))
+  else
+    MemoCNPJ.Lines.Add(Format('CNPJ %s é inválido: %s', [ACNPJ, DTValidador1.LastError]));
+end;
+
+procedure TFormTeste.AdicionarTesteCNPJAlfa(const ACNPJ: string);
+begin
+  DTValidador1.DocumentType := dtCNPJAlfanumerico;
+  DTValidador1.Document := ACNPJ;
+
+  if DTValidador1.Validate then
+    MemoCNPJAlfa.Lines.Add(Format('CNPJ Alfanumérico %s é válido.', [ACNPJ]))
+  else
+    MemoCNPJAlfa.Lines.Add(Format('CNPJ Alfanumérico %s é inválido: %s', [ACNPJ, DTValidador1.LastError]));
+end;
+
+procedure TFormTeste.AdicionarTesteAuto(const ACNPJ: string);
+var
+  TipoDetectado: string;
+begin
+  DTValidador1.DocumentType := dtCNPJAuto;
+  DTValidador1.Document := ACNPJ;
+
+  if DTValidador1.Validate then
+  begin
+    case DTValidador1.DetectedDocType of
+      dtCNPJ: TipoDetectado := 'CNPJ Numérico';
+      dtCNPJAlfanumerico: TipoDetectado := 'CNPJ Alfanumérico';
+      else TipoDetectado := 'Desconhecido';
+    end;
+
+    MemoAuto.Lines.Add(Format('Documento %s é válido. Tipo detectado: %s', [ACNPJ, TipoDetectado]));
+  end
+  else
+  begin
+    case DTValidador1.DetectedDocType of
+      dtCNPJ: TipoDetectado := 'CNPJ Numérico';
+      dtCNPJAlfanumerico: TipoDetectado := 'CNPJ Alfanumérico';
+      else TipoDetectado := 'Desconhecido';
+    end;
+
+    MemoAuto.Lines.Add(Format('Documento %s é inválido: %s. Tipo detectado: %s',
+      [ACNPJ, DTValidador1.LastError, TipoDetectado]));
+  end;
+end;
+
+procedure TFormTeste.ButtonValidarCPFClick(Sender: TObject);
+begin
+  MemoCPF.Clear;
+  AdicionarTesteCPF(EditCPF.Text);
+
+  // Testes adicionais de CPF
+  AdicionarTesteCPF('529.982.247-25');
+  AdicionarTesteCPF('111.111.111-11'); // CPF inválido (dígitos iguais)
+  AdicionarTesteCPF('123.456.789-00'); // CPF inválido (dígitos verificadores incorretos)
+end;
+
+procedure TFormTeste.ButtonValidarCNPJClick(Sender: TObject);
+begin
+  MemoCNPJ.Clear;
+  AdicionarTesteCNPJ(EditCNPJ.Text);
+
+  // Testes adicionais de CNPJ
+  AdicionarTesteCNPJ('12.345.678/0001-95');
+  AdicionarTesteCNPJ('11.111.111/1111-11'); // CNPJ inválido (dígitos iguais)
+  AdicionarTesteCNPJ('12.345.678/0001-00'); // CNPJ inválido (dígitos verificadores incorretos)
+end;
+
+procedure TFormTeste.ButtonValidarCNPJAlfaClick(Sender: TObject);
+begin
+  MemoCNPJAlfa.Clear;
+  AdicionarTesteCNPJAlfa(EditCNPJAlfa.Text);
+
+  // Testes adicionais de CNPJ Alfanumérico
+  AdicionarTesteCNPJAlfa('12ABC34501DE35');
+  AdicionarTesteCNPJAlfa('12.ABC.345/01DE-35'); // CNPJ com máscara
+  AdicionarTesteCNPJAlfa('ABCD1234567890'); // CNPJ inválido
+  AdicionarTesteCNPJAlfa('12IBC34501DE35'); // CNPJ com caractere proibido ('I')
+end;
+
+procedure TFormTeste.ButtonValidarAutoClick(Sender: TObject);
+begin
+  MemoAuto.Clear;
+  AdicionarTesteAuto(EditAuto.Text);
+
+  // Testes adicionais com detecção automática
+  AdicionarTesteAuto('12.345.678/0001-95'); // CNPJ numérico válido
+  AdicionarTesteAuto('12ABC34501DE35');     // CNPJ alfanumérico válido
+  AdicionarTesteAuto('12.ABC.345/01DE-35'); // CNPJ alfanumérico com máscara
+  AdicionarTesteAuto('11.111.111/1111-11'); // CNPJ numérico inválido
+  AdicionarTesteAuto('ABCD1234567890');     // CNPJ alfanumérico inválido
+end;
+
+procedure TFormTeste.ButtonTestarTodosClick(Sender: TObject);
+begin
+  // Limpar todos os memos
+  MemoCPF.Clear;
+  MemoCNPJ.Clear;
+  MemoCNPJAlfa.Clear;
+  MemoAuto.Clear;
+
+  // Executar todos os testes
+  ButtonValidarCPFClick(nil);
+  ButtonValidarCNPJClick(nil);
+  ButtonValidarCNPJAlfaClick(nil);
+  ButtonValidarAutoClick(nil);
+
+  ShowMessage('Todos os testes foram executados!');
+end;
+
+end.

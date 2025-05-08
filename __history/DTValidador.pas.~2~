@@ -1,0 +1,487 @@
+﻿unit DTValidador;
+
+interface
+
+uses
+  System.SysUtils, System.Classes, System.RegularExpressions, System.StrUtils;
+
+type
+  TDocumentType = (dtCPF, dtCNPJ, dtCNPJAlfanumerico);
+
+  TDTValidador = class(TComponent)
+  private
+    FDocumentType: TDocumentType;
+    FDocument: string;
+    FLastError: string;
+    FOnValidate: TNotifyEvent;
+    FIsValid: Boolean;
+    
+    { Constantes privadas }
+    const
+      CPF_LENGTH = 11;
+      CNPJ_LENGTH = 14;
+      CNPJ_BASE_LENGTH = 12;
+      CNPJ_ZERO = '00000000000000';
+      CPF_ZERO = '00000000000';
+      CARACTERES_PROIBIDOS_CNPJ = 'IOUQF';
+      
+    { Métodos privados }
+    function RemoveMascara(const ADocument: string): string;
+    function ValidateCPF(const ACPF: string): Boolean;
+    function ValidateCNPJ(const ACNPJ: string): Boolean;
+    function ValidateCNPJAlfanumerico(const ACNPJ: string): Boolean;
+    function CalcularDigitoCPF(const ACPF: string): string;
+    function CalcularDigitoCNPJ(const ACNPJ: string): string;
+    function CalcularDigitoCNPJAlfanumerico(const ACNPJ: string): string;
+    function CharParaValor(const C: Char): Integer;
+    procedure SetDocument(const Value: string);
+    procedure SetDocumentType(const Value: TDocumentType);
+    
+  protected
+    procedure DoValidate; virtual;
+    
+  public
+    constructor Create(AOwner: TComponent); override;
+    destructor Destroy; override;
+    
+    { Métodos públicos }
+    function Validate: Boolean;
+    function FormatarDocumento(const ADocument: string; AType: TDocumentType): string;
+    
+    { Propriedades públicas }
+    property IsValid: Boolean read FIsValid;
+    property LastError: string read FLastError;
+    
+  published
+    property DocumentType: TDocumentType read FDocumentType write SetDocumentType default dtCPF;
+    property Document: string read FDocument write SetDocument;
+    property OnValidate: TNotifyEvent read FOnValidate write FOnValidate;
+  end;
+
+procedure Register;
+
+implementation
+
+procedure Register;
+begin
+  RegisterComponents('DT Componentes', [TDTValidador]);
+end;
+
+{ TDTValidador }
+
+constructor TDTValidador.Create(AOwner: TComponent);
+begin
+  inherited Create(AOwner);
+  FDocumentType := dtCPF;
+  FDocument := '';
+  FLastError := '';
+  FIsValid := False;
+end;
+
+destructor TDTValidador.Destroy;
+begin
+  inherited Destroy;
+end;
+
+procedure TDTValidador.SetDocument(const Value: string);
+begin
+  if FDocument <> Value then
+  begin
+    FDocument := Value;
+    FIsValid := False;
+    FLastError := '';
+  end;
+end;
+
+procedure TDTValidador.SetDocumentType(const Value: TDocumentType);
+begin
+  if FDocumentType <> Value then
+  begin
+    FDocumentType := Value;
+    FIsValid := False;
+    FLastError := '';
+  end;
+end;
+
+function TDTValidador.RemoveMascara(const ADocument: string): string;
+begin
+  // Remove caracteres especiais como '.', '-', '/' e espaços
+  Result := TRegEx.Replace(ADocument, '[^\w]', '');
+end;
+
+procedure TDTValidador.DoValidate;
+begin
+  if Assigned(FOnValidate) then
+    FOnValidate(Self);
+end;
+
+function TDTValidador.CharParaValor(const C: Char): Integer;
+begin
+  if CharInSet(C, ['0'..'9']) then
+    Result := Ord(C) - Ord('0') // Conversão numérica normal
+  else if CharInSet(C, ['A'..'Z']) then
+    Result := Ord(C) - Ord('A') + 17 // Conversão alfanumérica A=17, B=18, etc.
+  else
+    raise Exception.CreateFmt('Caractere inválido no documento: %s', [C]);
+end;
+
+function TDTValidador.CalcularDigitoCPF(const ACPF: string): string;
+var
+  i, Soma, Digito1, Digito2: Integer;
+  CPFBase: string;
+begin
+  CPFBase := Copy(ACPF, 1, 9);
+  
+  // Cálculo do primeiro dígito verificador
+  Soma := 0;
+  for i := 1 to 9 do
+    Soma := Soma + StrToInt(CPFBase[i]) * (11 - i);
+    
+  Digito1 := 11 - (Soma mod 11);
+  if Digito1 >= 10 then
+    Digito1 := 0;
+    
+  // Cálculo do segundo dígito verificador
+  Soma := 0;
+  for i := 1 to 9 do
+    Soma := Soma + StrToInt(CPFBase[i]) * (12 - i);
+    
+  Soma := Soma + Digito1 * 2;
+  
+  Digito2 := 11 - (Soma mod 11);
+  if Digito2 >= 10 then
+    Digito2 := 0;
+    
+  Result := IntToStr(Digito1) + IntToStr(Digito2);
+end;
+
+function TDTValidador.CalcularDigitoCNPJ(const ACNPJ: string): string;
+var
+  i, Soma, Digito1, Digito2: Integer;
+  CNPJBase: string;
+  Peso1, Peso2: array[1..12] of Integer;
+begin
+  // Definição dos pesos para cálculo dos dígitos verificadores
+  Peso1[1] := 5; Peso1[2] := 4; Peso1[3] := 3; Peso1[4] := 2; Peso1[5] := 9; Peso1[6] := 8;
+  Peso1[7] := 7; Peso1[8] := 6; Peso1[9] := 5; Peso1[10] := 4; Peso1[11] := 3; Peso1[12] := 2;
+  
+  Peso2[1] := 6; Peso2[2] := 5; Peso2[3] := 4; Peso2[4] := 3; Peso2[5] := 2; Peso2[6] := 9;
+  Peso2[7] := 8; Peso2[8] := 7; Peso2[9] := 6; Peso2[10] := 5; Peso2[11] := 4; Peso2[12] := 3;
+  
+  CNPJBase := Copy(ACNPJ, 1, 12);
+  
+  // Cálculo do primeiro dígito verificador
+  Soma := 0;
+  for i := 1 to 12 do
+    Soma := Soma + StrToInt(CNPJBase[i]) * Peso1[i];
+    
+  Digito1 := 11 - (Soma mod 11);
+  if Digito1 >= 10 then
+    Digito1 := 0;
+    
+  // Cálculo do segundo dígito verificador
+  Soma := 0;
+  for i := 1 to 12 do
+    Soma := Soma + StrToInt(CNPJBase[i]) * Peso2[i];
+    
+  Soma := Soma + Digito1 * 2;
+  
+  Digito2 := 11 - (Soma mod 11);
+  if Digito2 >= 10 then
+    Digito2 := 0;
+    
+  Result := IntToStr(Digito1) + IntToStr(Digito2);
+end;
+
+function TDTValidador.CalcularDigitoCNPJAlfanumerico(const ACNPJ: string): string;
+var
+  i, SomatorioDV1, SomatorioDV2, DV1, DV2: Integer;
+  PesosDV: array[0..12] of Integer;
+  CNPJBase: string;
+begin
+  // Definição dos pesos para cálculo dos dígitos verificadores
+  PesosDV[0] := 6; PesosDV[1] := 5; PesosDV[2] := 4; PesosDV[3] := 3; PesosDV[4] := 2; 
+  PesosDV[5] := 9; PesosDV[6] := 8; PesosDV[7] := 7; PesosDV[8] := 6; PesosDV[9] := 5; 
+  PesosDV[10] := 4; PesosDV[11] := 3; PesosDV[12] := 2;
+  
+  CNPJBase := Copy(ACNPJ, 1, CNPJ_BASE_LENGTH);
+  
+  // Verifica se contém caracteres proibidos
+  if TRegEx.IsMatch(CNPJBase, '[' + CARACTERES_PROIBIDOS_CNPJ + ']') then
+    raise Exception.CreateFmt('O CNPJ não pode conter os caracteres: %s', [CARACTERES_PROIBIDOS_CNPJ]);
+  
+  // Calcula o primeiro dígito verificador
+  SomatorioDV1 := 0;
+  SomatorioDV2 := 0;
+  
+  for i := 0 to CNPJ_BASE_LENGTH - 1 do
+  begin
+    SomatorioDV1 := SomatorioDV1 + CharParaValor(CNPJBase[i+1]) * PesosDV[i+1];
+    SomatorioDV2 := SomatorioDV2 + CharParaValor(CNPJBase[i+1]) * PesosDV[i];
+  end;
+  
+  DV1 := SomatorioDV1 mod 11;
+  if DV1 < 2 then
+    DV1 := 0
+  else
+    DV1 := 11 - DV1;
+    
+  // Calcula o segundo dígito verificador
+  SomatorioDV2 := SomatorioDV2 + DV1 * PesosDV[CNPJ_BASE_LENGTH];
+  
+  DV2 := SomatorioDV2 mod 11;
+  if DV2 < 2 then
+    DV2 := 0
+  else
+    DV2 := 11 - DV2;
+    
+  // Retorna os dois dígitos verificadores como string
+  Result := IntToStr(DV1) + IntToStr(DV2);
+end;
+
+function TDTValidador.ValidateCPF(const ACPF: string): Boolean;
+var
+  CPFLimpo, Digitos, DigitoCalculado: string;
+  i: Integer;
+  Igual: Boolean;
+begin
+  Result := False;
+  FLastError := '';
+  
+  CPFLimpo := RemoveMascara(ACPF);
+  
+  // Verifica se o CPF tem 11 dígitos
+  if Length(CPFLimpo) <> CPF_LENGTH then
+  begin
+    FLastError := 'CPF deve conter 11 dígitos.';
+    Exit;
+  end;
+  
+  // Verifica se todos os dígitos são iguais
+  Igual := True;
+  for i := 2 to CPF_LENGTH do
+    if CPFLimpo[1] <> CPFLimpo[i] then
+    begin
+      Igual := False;
+      Break;
+    end;
+    
+  if Igual then
+  begin
+    FLastError := 'CPF inválido: todos os dígitos iguais.';
+    Exit;
+  end;
+  
+  // Verifica se o CPF é zero
+  if CPFLimpo = CPF_ZERO then
+  begin
+    FLastError := 'CPF inválido: todos os dígitos são zero.';
+    Exit;
+  end;
+  
+  // Verifica se os dígitos são válidos
+  try
+    for i := 1 to CPF_LENGTH do
+      StrToInt(CPFLimpo[i]);
+  except
+    on E: Exception do
+    begin
+      FLastError := 'CPF deve conter apenas números.';
+      Exit;
+    end;
+  end;
+  
+  // Calcula os dígitos verificadores
+  Digitos := Copy(CPFLimpo, 10, 2);
+  DigitoCalculado := CalcularDigitoCPF(CPFLimpo);
+  
+  Result := (Digitos = DigitoCalculado);
+  
+  if not Result then
+    FLastError := 'CPF inválido: dígitos verificadores incorretos.';
+end;
+
+function TDTValidador.ValidateCNPJ(const ACNPJ: string): Boolean;
+var
+  CNPJLimpo, Digitos, DigitoCalculado: string;
+  i: Integer;
+  Igual: Boolean;
+begin
+  Result := False;
+  FLastError := '';
+  
+  CNPJLimpo := RemoveMascara(ACNPJ);
+  
+  // Verifica se o CNPJ tem 14 dígitos
+  if Length(CNPJLimpo) <> CNPJ_LENGTH then
+  begin
+    FLastError := 'CNPJ deve conter 14 dígitos.';
+    Exit;
+  end;
+  
+  // Verifica se todos os dígitos são iguais
+  Igual := True;
+  for i := 2 to CNPJ_LENGTH do
+    if CNPJLimpo[1] <> CNPJLimpo[i] then
+    begin
+      Igual := False;
+      Break;
+    end;
+    
+  if Igual then
+  begin
+    FLastError := 'CNPJ inválido: todos os dígitos iguais.';
+    Exit;
+  end;
+  
+  // Verifica se o CNPJ é zero
+  if CNPJLimpo = CNPJ_ZERO then
+  begin
+    FLastError := 'CNPJ inválido: todos os dígitos são zero.';
+    Exit;
+  end;
+  
+  // Verifica se os dígitos são válidos
+  try
+    for i := 1 to CNPJ_LENGTH do
+      StrToInt(CNPJLimpo[i]);
+  except
+    on E: Exception do
+    begin
+      FLastError := 'CNPJ deve conter apenas números.';
+      Exit;
+    end;
+  end;
+  
+  // Calcula os dígitos verificadores
+  Digitos := Copy(CNPJLimpo, CNPJ_LENGTH-1, 2);
+  DigitoCalculado := CalcularDigitoCNPJ(CNPJLimpo);
+  
+  Result := (Digitos = DigitoCalculado);
+  
+  if not Result then
+    FLastError := 'CNPJ inválido: dígitos verificadores incorretos.';
+end;
+
+function TDTValidador.ValidateCNPJAlfanumerico(const ACNPJ: string): Boolean;
+var
+  CNPJLimpo, Digitos, DigitoCalculado: string;
+begin
+  Result := False;
+  FLastError := '';
+  
+  try
+    CNPJLimpo := RemoveMascara(ACNPJ);
+    CNPJLimpo := UpperCase(CNPJLimpo);
+    
+    // Verifica se o CNPJ tem 14 dígitos
+    if Length(CNPJLimpo) <> CNPJ_LENGTH then
+    begin
+      FLastError := 'CNPJ Alfanumérico deve conter 14 caracteres.';
+      Exit;
+    end;
+    
+    // Verifica se o CNPJ é zero
+    if CNPJLimpo = CNPJ_ZERO then
+    begin
+      FLastError := 'CNPJ inválido: todos os dígitos são zero.';
+      Exit;
+    end;
+    
+    // Verifica formato alfanumérico válido (12 posições alfanuméricas + 2 dígitos numéricos)
+    if not TRegEx.IsMatch(CNPJLimpo, '^[A-Z0-9]{12}\d{2}$') then
+    begin
+      FLastError := 'Formato de CNPJ Alfanumérico inválido.';
+      Exit;
+    end;
+    
+    // Verifica caracteres proibidos
+    if TRegEx.IsMatch(CNPJLimpo, '[' + CARACTERES_PROIBIDOS_CNPJ + ']') then
+    begin
+      FLastError := Format('O CNPJ não pode conter os caracteres: %s', [CARACTERES_PROIBIDOS_CNPJ]);
+      Exit;
+    end;
+    
+    // Calcula os dígitos verificadores
+    Digitos := Copy(CNPJLimpo, CNPJ_LENGTH-1, 2);
+    
+    try
+      DigitoCalculado := CalcularDigitoCNPJAlfanumerico(CNPJLimpo);
+      Result := (Digitos = DigitoCalculado);
+      
+      if not Result then
+        FLastError := 'CNPJ Alfanumérico inválido: dígitos verificadores incorretos.';
+    except
+      on E: Exception do
+      begin
+        FLastError := 'Erro ao calcular dígitos verificadores: ' + E.Message;
+        Exit;
+      end;
+    end;
+  except
+    on E: Exception do
+    begin
+      FLastError := 'Erro na validação do CNPJ Alfanumérico: ' + E.Message;
+      Exit;
+    end;
+  end;
+end;
+
+function TDTValidador.FormatarDocumento(const ADocument: string; AType: TDocumentType): string;
+var
+  DocLimpo: string;
+begin
+  DocLimpo := RemoveMascara(ADocument);
+  DocLimpo := UpperCase(DocLimpo);
+
+  case AType of
+    dtCPF:
+      begin
+        if Length(DocLimpo) = CPF_LENGTH then
+          Result := Copy(DocLimpo, 1, 3) + '.' + Copy(DocLimpo, 4, 3) + '.' + 
+                     Copy(DocLimpo, 7, 3) + '-' + Copy(DocLimpo, 10, 2)
+        else
+          Result := DocLimpo; // Retorna sem formatação se tamanho inválido
+      end;
+      
+    dtCNPJ:
+      begin
+        if Length(DocLimpo) = CNPJ_LENGTH then
+          Result := Copy(DocLimpo, 1, 2) + '.' + Copy(DocLimpo, 3, 3) + '.' + 
+                     Copy(DocLimpo, 6, 3) + '/' + Copy(DocLimpo, 9, 4) + '-' + 
+                     Copy(DocLimpo, 13, 2)
+        else
+          Result := DocLimpo; // Retorna sem formatação se tamanho inválido
+      end;
+      
+    dtCNPJAlfanumerico:
+      begin
+        if Length(DocLimpo) = CNPJ_LENGTH then
+          Result := Copy(DocLimpo, 1, 2) + '.' + Copy(DocLimpo, 3, 3) + '.' + 
+                     Copy(DocLimpo, 6, 3) + '/' + Copy(DocLimpo, 9, 4) + '-' + 
+                     Copy(DocLimpo, 13, 2)
+        else
+          Result := DocLimpo; // Retorna sem formatação se tamanho inválido
+      end;
+  end;
+end;
+
+function TDTValidador.Validate: Boolean;
+begin
+  FIsValid := False;
+  FLastError := '';
+  
+  case FDocumentType of
+    dtCPF:
+      FIsValid := ValidateCPF(FDocument);
+    dtCNPJ:
+      FIsValid := ValidateCNPJ(FDocument);
+    dtCNPJAlfanumerico:
+      FIsValid := ValidateCNPJAlfanumerico(FDocument);
+  end;
+  
+  DoValidate;
+  Result := FIsValid;
+end;
+
+end.

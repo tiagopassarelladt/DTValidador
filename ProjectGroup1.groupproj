@@ -1,0 +1,48 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{B92EC316-9105-42C5-BE01-C4D17F502BFF}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="DTValidadorPk.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Demo\ValidadorTest.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="DTValidadorPk">
+        <MSBuild Projects="DTValidadorPk.dproj"/>
+    </Target>
+    <Target Name="DTValidadorPk:Clean">
+        <MSBuild Projects="DTValidadorPk.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="DTValidadorPk:Make">
+        <MSBuild Projects="DTValidadorPk.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="ValidadorTest">
+        <MSBuild Projects="Demo\ValidadorTest.dproj"/>
+    </Target>
+    <Target Name="ValidadorTest:Clean">
+        <MSBuild Projects="Demo\ValidadorTest.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ValidadorTest:Make">
+        <MSBuild Projects="Demo\ValidadorTest.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="DTValidadorPk;ValidadorTest"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="DTValidadorPk:Clean;ValidadorTest:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="DTValidadorPk:Make;ValidadorTest:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>
